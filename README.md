@@ -222,6 +222,7 @@ where A=1, T=2, C=3, G=4
 ## 👨‍💻 Author
 
 [**Dhruv Sharma** ](https://github.com/Dhruv-Sharma29)
+[**Vansh Chowdhury** ](https://github.com/itsvnsh)
 
 ---
 
