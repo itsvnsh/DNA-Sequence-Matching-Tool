@@ -3,8 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width,initial-scale=1.0">
+    <meta name="description" content="GenomeScan — Advanced DNA sequence pattern matching with 6 algorithms, interactive visualization, and bioinformatics tools.">
     <title>GenomeScan — DNA Pattern Matcher</title>
     <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=JetBrains+Mono:wght@300;400;500;700&family=Outfit:wght@300;400;500&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -15,19 +17,27 @@
             <div class="logo-helix">🧬</div>
             <div class="logo-text">
                 <h1>GenomeScan</h1>
-                <p>DNA Pattern Matching · DAA Project</p>
+                <p>DNA Pattern Matching · 6 Algorithms · DAA Project</p>
             </div>
         </div>
-        <div class="api-status">
-            <div class="sdot" id="sdot"></div>
-            <span id="stxt">Checking API...</span>
+        <div class="header-right">
+            <button class="theme-toggle" id="theme-toggle" onclick="toggleTheme()" title="Toggle theme">
+                <span id="theme-icon">🌙</span>
+            </button>
+            <div class="api-status">
+                <div class="sdot" id="sdot"></div>
+                <span id="stxt">Checking API...</span>
+            </div>
         </div>
     </header>
 
-    <nav class="nav">
+    <nav class="nav" id="main-nav">
         <button class="nav-btn active" onclick="goTab('matcher')">🔬 Matcher</button>
         <button class="nav-btn" onclick="goTab('benchmark')">📊 Benchmark</button>
+        <button class="nav-btn" onclick="goTab('visualize')">🎬 Visualize</button>
         <button class="nav-btn" onclick="goTab('utils')">🧬 DNA Utils</button>
+        <button class="nav-btn" onclick="goTab('upload')">📁 FASTA Upload</button>
+        <button class="nav-btn" onclick="goTab('history')">🕐 History</button>
         <button class="nav-btn" onclick="goTab('lps')">⚡ KMP / LPS</button>
         <button class="nav-btn" onclick="goTab('flow')">🗺 Flow</button>
         <button class="nav-btn" onclick="goTab('info')">📚 Algorithms</button>
@@ -53,7 +63,8 @@
                     <div class="apill" onclick="pickAlgo(this,'RABIN-KARP')"><span class="pname">Rabin-Karp</span><span class="pcx">O(n+m) avg</span></div>
                     <div class="apill" onclick="pickAlgo(this,'BOYER-MOORE')"><span class="pname">Boyer-Moore</span><span class="pcx">O(n/m) best</span></div>
                     <div class="apill" onclick="pickAlgo(this,'Z-ALGORITHM')"><span class="pname">Z-Algorithm</span><span class="pcx">O(n+m)</span></div>
-                    <div class="apill all-btn" onclick="pickAlgo(this,'ALL')"><span class="pname">▶ Run All</span><span class="pcx">Compare</span></div>
+                    <div class="apill" onclick="pickAlgo(this,'AHO-CORASICK')"><span class="pname">Aho-Corasick</span><span class="pcx">O(n+m+z)</span></div>
+                    <div class="apill all-btn" onclick="pickAlgo(this,'ALL')" style="grid-column:span 3"><span class="pname">▶ Run All 6</span><span class="pcx">Compare</span></div>
                 </div>
                 <button class="btn-run" id="btn-match" onclick="doMatch()">SEARCH PATTERN →</button>
             </div>
@@ -77,7 +88,7 @@
     <!-- BENCHMARK -->
     <section id="t-benchmark" class="hidden">
         <div class="card">
-            <div class="chead">Performance Benchmark — All 5 Algorithms</div>
+            <div class="chead">Performance Benchmark — All 6 Algorithms</div>
             <div class="cols">
                 <div class="field"><label>Genome</label><textarea id="b-text" style="height:70px">ATGCATGCTTACGATCGATCGATCGTAGCTAGCATGCATGCTTACGATGCATCGATCGGCTAGCATGCATTTACGATCGATCGTAGCTAGCATGCATGCTTACGATCGATCG</textarea></div>
                 <div class="field"><label>Pattern</label><input type="text" id="b-pattern" value="ATGCAT">
@@ -86,13 +97,69 @@
                             <button onclick="setPreset('short')" class="opbtn">Short 50bp</button>
                             <button onclick="setPreset('medium')" class="opbtn">Medium 500bp</button>
                             <button onclick="setPreset('long')" class="opbtn">Long 2000bp</button>
+                            <button onclick="setPreset('huge')" class="opbtn">Huge 10000bp</button>
                         </div>
                     </div>
                 </div>
             </div>
             <button class="btn-run" id="btn-bench" onclick="doBenchmark()">RUN BENCHMARK →</button>
         </div>
-        <div class="card hidden" id="bench-out"><div class="chead">Comparison</div><div id="bench-rows"></div></div>
+        <div class="card hidden" id="bench-out">
+            <div class="chead">Comparison</div>
+            <div id="bench-rows"></div>
+            <div style="margin-top:20px">
+                <canvas id="bench-chart" height="260"></canvas>
+            </div>
+        </div>
+        <div class="card hidden" id="scale-card">
+            <div class="chead">Scaling Analysis</div>
+            <p style="font-size:11px;color:var(--muted);margin-bottom:14px;font-family:var(--mono)">
+                Auto-benchmarks at 100, 500, 1000, 2500, 5000bp to show how algorithms scale.
+            </p>
+            <button class="btn-run" id="btn-scale" onclick="doScaleTest()" style="background:linear-gradient(135deg,var(--purple),var(--blue))">RUN SCALING TEST →</button>
+            <canvas id="scale-chart" height="300" style="margin-top:16px"></canvas>
+        </div>
+    </section>
+
+    <!-- VISUALIZE -->
+    <section id="t-visualize" class="hidden">
+        <div class="card">
+            <div class="chead">Step-by-Step Algorithm Visualization</div>
+            <div class="cols">
+                <div class="field"><label>Text</label><input type="text" id="v-text" value="ATGCATGCTTACG" style="font-family:var(--mono)"></div>
+                <div class="field"><label>Pattern</label><input type="text" id="v-pattern" value="ATGC" style="font-family:var(--mono)"></div>
+            </div>
+            <div style="margin-bottom:14px">
+                <label style="font-size:10px;color:var(--muted);letter-spacing:1px;display:block;margin-bottom:5px;font-family:var(--mono)">Algorithm</label>
+                <div style="display:flex;gap:6px;flex-wrap:wrap">
+                    <button class="opbtn on" id="vis-naive" onclick="pickVis(this,'naive')">Naive</button>
+                    <button class="opbtn" id="vis-kmp" onclick="pickVis(this,'kmp')">KMP</button>
+                </div>
+            </div>
+            <div class="vis-controls">
+                <button class="btn-ctrl" id="vis-play" onclick="visPlay()">▶ Play</button>
+                <button class="btn-ctrl" id="vis-step" onclick="visStep()">⏩ Step</button>
+                <button class="btn-ctrl" id="vis-reset" onclick="visReset()">⟳ Reset</button>
+                <div class="speed-control">
+                    <label style="font-size:10px;color:var(--muted);font-family:var(--mono)">Speed</label>
+                    <input type="range" id="vis-speed" min="50" max="1000" value="400" style="width:120px">
+                </div>
+            </div>
+        </div>
+        <div class="card">
+            <div class="chead">Visualization</div>
+            <div id="vis-display" class="vis-display">
+                <div class="vis-info" id="vis-info">Press Play or Step to begin</div>
+                <div class="vis-text-row" id="vis-text-row"></div>
+                <div class="vis-pat-row" id="vis-pat-row"></div>
+                <div class="vis-log" id="vis-log"></div>
+            </div>
+            <div class="vis-stats" id="vis-stats">
+                <span>Comparisons: <b id="vis-cmp">0</b></span>
+                <span>Matches: <b id="vis-matches">0</b></span>
+                <span>Step: <b id="vis-stepnum">0</b></span>
+            </div>
+        </div>
     </section>
 
     <!-- UTILS -->
@@ -114,6 +181,35 @@
                 <button class="opbtn" onclick="doUtil(this,'mutate')">Mutation Detect</button>
             </div>
             <div class="util-out" id="u-out">Select an operation above…</div>
+        </div>
+    </section>
+
+    <!-- FASTA UPLOAD -->
+    <section id="t-upload" class="hidden">
+        <div class="card">
+            <div class="chead">FASTA File Upload</div>
+            <div class="drop-zone" id="drop-zone">
+                <div class="drop-icon">📂</div>
+                <div class="drop-text">Drag & drop a FASTA file here</div>
+                <div class="drop-sub">or click to browse · Supports .fasta, .fa, .fna, .txt</div>
+                <input type="file" id="fasta-input" accept=".fasta,.fa,.fna,.txt" style="display:none">
+            </div>
+            <div id="fasta-result" class="hidden" style="margin-top:16px">
+                <div class="chead">Parsed Sequences</div>
+                <div id="fasta-sequences"></div>
+                <button class="btn-run" style="margin-top:12px" onclick="useFastaInMatcher()">USE IN MATCHER →</button>
+            </div>
+        </div>
+    </section>
+
+    <!-- HISTORY -->
+    <section id="t-history" class="hidden">
+        <div class="card">
+            <div class="chead" style="justify-content:space-between">
+                <span>Search History</span>
+                <button class="opbtn" onclick="clearHistory()" style="margin-left:auto">🗑 Clear All</button>
+            </div>
+            <div id="history-list" style="font-family:var(--mono);font-size:12px;color:var(--muted)">Loading...</div>
         </div>
     </section>
 
@@ -148,35 +244,36 @@
                     <div class="fbox"><div class="flbl">runSearch() / fetch()</div><div class="fsub">POST /api/match → JSON body</div></div>
                     <div class="farr">↓ HTTP Request</div>
                     <div class="flyr">Spring Boot · Port 8080</div>
-                    <div class="fbox"><div class="flbl">ApiController.java</div><div class="fsub">@PostMapping("/match")</div></div>
+                    <div class="fbox"><div class="flbl">ApiController.java</div><div class="fsub">@PostMapping("/match") · @Valid DTO</div></div>
                     <div class="farr">↓</div>
-                    <div class="fbox"><div class="flbl">MatcherService.java</div><div class="fsub">Business logic · switch(algo)</div></div>
+                    <div class="fbox"><div class="flbl">MatcherService.java</div><div class="fsub">Strategy Pattern · algorithm dispatch</div></div>
                     <div class="farr">↓</div>
-                    <div class="fbox"><div class="flbl">Algorithms.java</div><div class="fsub">KMP / RK / BM / Naive / Z</div></div>
+                    <div class="fbox"><div class="flbl">StringMatchingStrategy</div><div class="fsub">KMP / RK / BM / Naive / Z / Aho-Corasick</div></div>
                     <div class="farr">↓</div>
-                    <div class="fbox"><div class="flbl">MatchResult.java</div><div class="fsub">positions · comparisons · timeNs</div></div>
+                    <div class="fbox"><div class="flbl">SearchHistoryRepository</div><div class="fsub">Save to H2 database</div></div>
                     <div class="farr">↓ JSON Response</div>
-                    <div class="fbox"><div class="flbl">Frontend renders</div><div class="fsub">Cards · bars · strand viewer</div></div>
+                    <div class="fbox"><div class="flbl">Frontend renders</div><div class="fsub">Cards · charts · strand viewer</div></div>
                 </div>
             </div>
             <div>
                 <div class="card">
                     <div class="chead">API Endpoints</div>
                     <div style="display:flex;flex-direction:column;gap:10px">
-                        <div class="iblock"><h3>POST /api/match</h3><div class="ikv"><span>Request</span><span style="font-family:var(--mono);font-size:10px;color:var(--teal)">{text, pattern, algo}</span></div><div class="ikv"><span>Response</span><span style="font-family:var(--mono);font-size:10px;color:var(--teal)">{matches, positions, results[]}</span></div><div class="idesc">Pass algo: "NAIVE","KMP","RABIN-KARP","BOYER-MOORE","Z-ALGORITHM", or "ALL"</div></div>
-                        <div class="iblock"><h3>POST /api/benchmark</h3><div class="ikv"><span>Request</span><span style="font-family:var(--mono);font-size:10px;color:var(--teal)">{text, pattern}</span></div><div class="ikv"><span>Response</span><span style="font-family:var(--mono);font-size:10px;color:var(--teal)">{results[5]}</span></div><div class="idesc">Runs all 5 algorithms, returns comparison counts and timing</div></div>
-                        <div class="iblock"><h3>POST /api/dna/utils</h3><div class="ikv"><span>Request</span><span style="font-family:var(--mono);font-size:10px;color:var(--teal)">{op, seq, seq2, k}</span></div><div class="ikv"><span>op values</span><span style="font-family:var(--mono);font-size:10px;color:var(--teal)">gc, hamming, edit, kmer…</span></div></div>
+                        <div class="iblock"><h3>POST /api/match</h3><div class="ikv"><span>Request</span><span style="font-family:var(--mono);font-size:10px;color:var(--teal)">MatchRequest {text, pattern, algo}</span></div><div class="ikv"><span>Response</span><span style="font-family:var(--mono);font-size:10px;color:var(--teal)">{matches, positions, results[]}</span></div><div class="idesc">Validated with @Valid — supports 6 algorithms + ALL</div></div>
+                        <div class="iblock"><h3>POST /api/benchmark</h3><div class="ikv"><span>Request</span><span style="font-family:var(--mono);font-size:10px;color:var(--teal)">BenchmarkRequest {text, pattern}</span></div><div class="ikv"><span>Response</span><span style="font-family:var(--mono);font-size:10px;color:var(--teal)">{results[6]}</span></div><div class="idesc">Runs all 6 algorithms, returns comparison counts and timing</div></div>
+                        <div class="iblock"><h3>POST /api/upload/fasta</h3><div class="ikv"><span>Request</span><span style="font-family:var(--mono);font-size:10px;color:var(--teal)">MultipartFile</span></div><div class="idesc">Parses FASTA format files for genome sequences</div></div>
+                        <div class="iblock"><h3>GET /api/history</h3><div class="idesc">Returns recent search history from H2 database</div></div>
                         <div class="iblock"><h3>GET /api/health</h3><div class="idesc">Returns {status:"UP"} — UI uses this for the green dot</div></div>
                     </div>
                 </div>
-            </div>
-        </div>
-        <div class="card">
-            <div class="chead">MVC Architecture</div>
-            <div class="cols3">
-                <div class="iblock" style="border-color:rgba(0,229,195,.2)"><h3 style="color:var(--teal)">Controller Layer</h3><div class="ikv"><span>File</span><span>ApiController.java</span></div><div class="ikv"><span>Role</span><span>Handle HTTP</span></div><div class="ikv"><span>Knows</span><span>HTTP + JSON only</span></div><div class="idesc">Receives request, validates, delegates to service, returns JSON. Zero algorithm logic.</div></div>
-                <div class="iblock" style="border-color:rgba(167,139,250,.2)"><h3 style="color:var(--purple)">Service Layer</h3><div class="ikv"><span>File</span><span>MatcherService.java</span></div><div class="ikv"><span>Role</span><span>Business logic</span></div><div class="ikv"><span>Knows</span><span>Which algo to call</span></div><div class="idesc">Contains switch(algo), DNA utility methods, input sanitization. Isolated from HTTP.</div></div>
-                <div class="iblock" style="border-color:rgba(251,191,36,.2)"><h3 style="color:var(--amber)">Algorithm Layer</h3><div class="ikv"><span>File</span><span>Algorithms.java</span></div><div class="ikv"><span>Role</span><span>Core computation</span></div><div class="ikv"><span>Knows</span><span>Only strings, no Spring</span></div><div class="idesc">Pure static functions. text + pattern → MatchResult. Independently testable.</div></div>
+                <div class="card" style="margin-top:10px">
+                    <div class="chead">Design Patterns</div>
+                    <div class="cols3">
+                        <div class="iblock" style="border-color:rgba(0,229,195,.2)"><h3 style="color:var(--teal)">Strategy Pattern</h3><div class="idesc">Each algorithm implements StringMatchingStrategy. Auto-injected by Spring.</div></div>
+                        <div class="iblock" style="border-color:rgba(167,139,250,.2)"><h3 style="color:var(--purple)">MVC + Service</h3><div class="idesc">Controller → Service → Algorithm layers. Clean separation of concerns.</div></div>
+                        <div class="iblock" style="border-color:rgba(251,191,36,.2)"><h3 style="color:var(--amber)">Repository Pattern</h3><div class="idesc">Spring Data JPA for SearchHistory. Auto-generated SQL from method names.</div></div>
+                    </div>
+                </div>
             </div>
         </div>
     </section>
@@ -189,7 +286,7 @@
             <div class="iblock"><h3>Rabin-Karp</h3><div class="ikv"><span>Time avg</span><span class="cxbadge cxg">O(n+m)</span></div><div class="ikv"><span>Time worst</span><span class="cxbadge cxr">O(n·m)</span></div><div class="ikv"><span>Space</span><span>O(1)</span></div><div class="ikv"><span>Best for</span><span>Multiple pattern search</span></div><div class="idesc">Rolling polynomial hash. Compares hash values first, verifies on match. Hash collisions cause worst case. Best when searching many patterns simultaneously.</div></div>
             <div class="iblock"><h3>Boyer-Moore</h3><div class="ikv"><span>Time best</span><span class="cxbadge cxg">O(n/m)</span></div><div class="ikv"><span>Time avg</span><span class="cxbadge cxg">O(n)</span></div><div class="ikv"><span>Space</span><span>O(σ+m)</span></div><div class="ikv"><span>Best for</span><span>Long patterns, large text</span></div><div class="idesc">Scans pattern right-to-left. Bad-character heuristic: if char not in pattern, skip m positions. Often the fastest algorithm in practice for genomic search.</div></div>
             <div class="iblock"><h3>Z-Algorithm</h3><div class="ikv"><span>Time</span><span class="cxbadge cxg">O(n+m)</span></div><div class="ikv"><span>Space</span><span>O(n+m)</span></div><div class="ikv"><span>Structure</span><span>Z-array of concat</span></div><div class="ikv"><span>Style</span><span>Elegant, linear</span></div><div class="idesc">Concatenates pattern+"$"+text, builds Z-array where Z[i] = longest match of prefix. Positions where Z[i]=m are matches. Clean and cache-friendly.</div></div>
-            <div class="iblock"><h3>When to use which?</h3><div class="ikv"><span>Small text</span><span>Naive (no overhead)</span></div><div class="ikv"><span>Repetitive DNA</span><span>KMP (no backtracking)</span></div><div class="ikv"><span>Multi-pattern</span><span>Rabin-Karp</span></div><div class="ikv"><span>Long patterns</span><span>Boyer-Moore</span></div><div class="ikv"><span>Clean code</span><span>Z-Algorithm</span></div><div class="idesc">For genomic search (long text, medium pattern), Boyer-Moore usually wins. KMP for streams. Rabin-Karp for gene family searches.</div></div>
+            <div class="iblock" style="border-color:rgba(0,229,195,.25)"><h3 style="color:var(--teal)">Aho-Corasick ★ NEW</h3><div class="ikv"><span>Time</span><span class="cxbadge cxg">O(n+m+z)</span></div><div class="ikv"><span>Space</span><span>O(m×σ) — trie</span></div><div class="ikv"><span>Structure</span><span>Trie + failure links</span></div><div class="ikv"><span>Best for</span><span>Multi-pattern search</span></div><div class="idesc">Builds a trie automaton with failure links (generalized KMP on a trie). Searches for multiple patterns in a single pass. Used in gene motif discovery and intrusion detection systems.</div></div>
         </div>
     </section>
 

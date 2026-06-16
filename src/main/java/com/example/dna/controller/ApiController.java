@@ -1,121 +1,127 @@
 package com.example.dna.controller;
 
+import com.example.dna.dto.*;
 import com.example.dna.model.MatchResult;
-import com.example.dna.controller.MatcherService;
-import org.springframework.beans.factory.annotation.Autowired;
+import com.example.dna.model.SearchHistory;
+import com.example.dna.repository.SearchHistoryRepository;
+import com.example.dna.service.MatcherService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.*;
 
+/**
+ * REST controller for DNA pattern matching operations.
+ * All endpoints use typed DTOs with bean validation.
+ */
 @RestController
 @RequestMapping("/api")
-@CrossOrigin(origins = "*")   // allows frontend on different port to call this
+@CrossOrigin(origins = "*")
+@Tag(name = "DNA Pattern Matching", description = "APIs for genome sequence pattern matching and bioinformatics utilities")
 public class ApiController {
 
-    @Autowired
-    private MatcherService matcherService;
+    private final MatcherService matcherService;
+    private final SearchHistoryRepository historyRepository;
+
+    public ApiController(MatcherService matcherService, SearchHistoryRepository historyRepository) {
+        this.matcherService = matcherService;
+        this.historyRepository = historyRepository;
+    }
 
     // ─── POST /api/match ─────────────────────────────────────
-    // Body: { "text": "ATGCAT...", "pattern": "ATG", "algo": "KMP" }
     @PostMapping("/match")
-    public ResponseEntity<Map<String, Object>> match(@RequestBody Map<String, String> req) {
-        try {
-            String text    = req.getOrDefault("text", "");
-            String pattern = req.getOrDefault("pattern", "");
-            String algo    = req.getOrDefault("algo", "ALL");
+    @Operation(summary = "Run pattern matching", description = "Search for a pattern in a DNA sequence using the specified algorithm")
+    public ResponseEntity<Map<String, Object>> match(@Valid @RequestBody MatchRequest req) {
+        List<MatchResult> results = matcherService.runSelected(req.text(), req.pattern(), req.algo());
+        MatchResult first = results.get(0);
 
-            List<MatchResult> results = matcherService.runSelected(text, pattern, algo);
-            MatchResult first = results.get(0);
+        Map<String, Object> res = new LinkedHashMap<>();
+        res.put("success",   true);
+        res.put("matches",   first.getPositions().size());
+        res.put("positions", first.getPositions());
+        res.put("results",   results.stream().map(this::toMap).toList());
 
-            Map<String, Object> res = new LinkedHashMap<>();
-            res.put("success",   true);
-            res.put("matches",   first.getPositions().size());
-            res.put("positions", first.getPositions());
-            res.put("results",   results.stream().map(r -> {
-                Map<String, Object> m = new LinkedHashMap<>();
-                m.put("name",        r.getName());
-                m.put("comparisons", r.getComparisons());
-                m.put("timeNs",      r.getTimeNs());
-                m.put("complexity",  r.getComplexity());
-                m.put("matches",     r.getPositions().size());
-                return m;
-            }).toList());
-
-            return ResponseEntity.ok(res);
-
-        } catch (Exception e) {
-            Map<String, Object> err = new HashMap<>();
-            err.put("success", false);
-            err.put("error", e.getMessage());
-            return ResponseEntity.badRequest().body(err);
-        }
+        return ResponseEntity.ok(res);
     }
 
     // ─── POST /api/benchmark ─────────────────────────────────
-    // Runs ALL 5 algorithms and returns comparison stats
     @PostMapping("/benchmark")
-    public ResponseEntity<Map<String, Object>> benchmark(@RequestBody Map<String, String> req) {
-        try {
-            String text    = req.getOrDefault("text", "");
-            String pattern = req.getOrDefault("pattern", "");
+    @Operation(summary = "Benchmark all algorithms", description = "Run all algorithms on the same input and compare performance")
+    public ResponseEntity<Map<String, Object>> benchmark(@Valid @RequestBody BenchmarkRequest req) {
+        List<MatchResult> results = matcherService.runAll(req.text(), req.pattern());
 
-            List<MatchResult> results = matcherService.runAll(text, pattern);
+        Map<String, Object> res = new LinkedHashMap<>();
+        res.put("success",       true);
+        res.put("textLength",    req.text().length());
+        res.put("patternLength", req.pattern().length());
+        res.put("results",       results.stream().map(this::toMap).toList());
 
-            Map<String, Object> res = new LinkedHashMap<>();
-            res.put("success", true);
-            res.put("textLength", text.length());
-            res.put("patternLength", pattern.length());
-            res.put("results", results.stream().map(r -> {
-                Map<String, Object> m = new LinkedHashMap<>();
-                m.put("name",        r.getName());
-                m.put("comparisons", r.getComparisons());
-                m.put("timeNs",      r.getTimeNs());
-                m.put("complexity",  r.getComplexity());
-                return m;
-            }).toList());
-
-            return ResponseEntity.ok(res);
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().body(Map.of("success", false, "error", e.getMessage()));
-        }
+        return ResponseEntity.ok(res);
     }
 
     // ─── POST /api/dna/utils ─────────────────────────────────
-    // Body: { "op": "gc", "seq": "ATGCAT", "seq2": "..." }
     @PostMapping("/dna/utils")
-    public ResponseEntity<Map<String, Object>> utils(@RequestBody Map<String, String> req) {
-        try {
-            String op   = req.getOrDefault("op", "");
-            String seq  = req.getOrDefault("seq", "");
-            String seq2 = req.getOrDefault("seq2", "");
-            int k       = Integer.parseInt(req.getOrDefault("k", "3"));
+    @Operation(summary = "DNA utilities", description = "Bioinformatics operations: complement, GC content, edit distance, etc.")
+    public ResponseEntity<Map<String, Object>> utils(@Valid @RequestBody UtilsRequest req) {
+        Map<String, Object> res = new LinkedHashMap<>();
+        res.put("success", true);
+        res.put("op", req.op());
 
-            Map<String, Object> res = new LinkedHashMap<>();
-            res.put("success", true);
-            res.put("op", op);
-
-            switch (op) {
-                case "complement"  -> res.put("result", matcherService.complement(seq));
-                case "revcomp"     -> res.put("result", matcherService.reverseComplement(seq));
-                case "gc"          -> res.put("result", String.format("%.2f%%", matcherService.gcContent(seq)));
-                case "hamming"     -> res.put("result", matcherService.hammingDistance(seq, seq2));
-                case "edit"        -> res.put("result", matcherService.editDistance(seq, seq2));
-                case "lps"         -> res.put("result", matcherService.getLPS(seq));
-                case "kmer"        -> res.put("result", matcherService.kmerFrequency(seq, k));
-                case "mutate"      -> res.put("result", matcherService.detectMutations(seq, seq2));
-                default            -> throw new IllegalArgumentException("Unknown operation: " + op);
-            }
-
-            return ResponseEntity.ok(res);
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().body(Map.of("success", false, "error", e.getMessage()));
+        switch (req.op()) {
+            case "complement"    -> res.put("result", matcherService.complement(req.seq()));
+            case "revcomp"       -> res.put("result", matcherService.reverseComplement(req.seq()));
+            case "gc"            -> res.put("result", String.format("%.2f%%", matcherService.gcContent(req.seq())));
+            case "hamming"       -> res.put("result", matcherService.hammingDistance(req.seq(), req.seq2()));
+            case "edit"          -> res.put("result", matcherService.editDistance(req.seq(), req.seq2()));
+            case "lps"           -> res.put("result", matcherService.getLPS(req.seq()));
+            case "kmer"          -> res.put("result", matcherService.kmerFrequency(req.seq(), req.k()));
+            case "mutate"        -> res.put("result", matcherService.detectMutations(req.seq(), req.seq2()));
+            default              -> throw new IllegalArgumentException("Unknown operation: " + req.op());
         }
+
+        return ResponseEntity.ok(res);
     }
 
     // ─── GET /api/health ─────────────────────────────────────
     @GetMapping("/health")
+    @Operation(summary = "Health check", description = "Returns API status")
     public ResponseEntity<Map<String, String>> health() {
-        return ResponseEntity.ok(Map.of("status", "UP", "service", "DNA Matcher API"));
+        return ResponseEntity.ok(Map.of("status", "UP", "service", "GenomeScan API", "version", "2.0"));
+    }
+
+    // ─── GET /api/history ────────────────────────────────────
+    @GetMapping("/history")
+    @Operation(summary = "Search history", description = "Returns recent search history from the database")
+    public ResponseEntity<Map<String, Object>> history() {
+        List<SearchHistory> entries = historyRepository.findTop50ByOrderByTimestampDesc();
+        Map<String, Object> res = new LinkedHashMap<>();
+        res.put("success", true);
+        res.put("count", entries.size());
+        res.put("entries", entries);
+        return ResponseEntity.ok(res);
+    }
+
+    // ─── DELETE /api/history ─────────────────────────────────
+    @DeleteMapping("/history")
+    @Operation(summary = "Clear history", description = "Deletes all search history entries")
+    public ResponseEntity<Map<String, Object>> clearHistory() {
+        historyRepository.deleteAll();
+        return ResponseEntity.ok(Map.of("success", true, "message", "History cleared"));
+    }
+
+    // ─── Helper ──────────────────────────────────────────────
+
+    private Map<String, Object> toMap(MatchResult r) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("name",        r.getName());
+        m.put("comparisons", r.getComparisons());
+        m.put("timeNs",      r.getTimeNs());
+        m.put("complexity",  r.getComplexity());
+        m.put("matches",     r.getPositions().size());
+        m.put("positions",   r.getPositions());
+        return m;
     }
 }
